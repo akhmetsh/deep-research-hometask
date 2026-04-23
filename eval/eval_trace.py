@@ -37,6 +37,10 @@ class EvalTrace:
     scorer_version: str = SCORER_VERSION
     scored_at: str | None = None
 
+    # Populated by run_case_with_retry(); 0 when no retries were needed.
+    retry_count: int = 0
+    retry_errors: list[str] = field(default_factory=list)
+
     # ------------------------------------------------------------------
     # Convenience accessors — read from run_result without coupling callers
     # to the agent's RunResult class.
@@ -88,6 +92,8 @@ class EvalTrace:
             "assertion_results": self.assertion_results,
             "metric_results": self.metric_results,
             "judge_verdict": self.judge_verdict,
+            "retry_count": self.retry_count,
+            "retry_errors": self.retry_errors,
             "run_result": self.run_result,
         }
 
@@ -112,6 +118,8 @@ class EvalTrace:
             case_passed=data.get("case_passed"),
             scorer_version=data.get("scorer_version", SCORER_VERSION),
             scored_at=data.get("scored_at"),
+            retry_count=data.get("retry_count", 0),
+            retry_errors=data.get("retry_errors", []),
         )
 
     @classmethod

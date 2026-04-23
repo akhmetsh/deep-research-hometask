@@ -16,6 +16,11 @@ env/
 eval_traces/
 traces/
 reports/
+run_summaries/
+
+# Editor
+.vscode/
+.idea/
 
 # macOS
 .DS_Store

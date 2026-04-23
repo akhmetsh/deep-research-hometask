@@ -19,7 +19,9 @@ import argparse
 import json
 import sys
 import textwrap
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 _ROOT = Path(__file__).parent.parent
@@ -44,7 +46,7 @@ except ImportError:
 
 from eval.eval_trace import EvalTrace
 from eval.loader import load_all_cases, load_case_by_id
-from eval.runner import run_case
+from eval.runner import make_error_trace, run_case, run_case_with_retry
 from eval.run_summary import build_summary, diff_summaries, load_summary, save_summary
 from eval.scorer import score
 
@@ -198,14 +200,11 @@ def _print_trace(trace: EvalTrace) -> None:
 # Commands
 # ---------------------------------------------------------------------------
 
-def _repeat_label(i: int, n: int) -> str:
-    return f"repeat {i + 1}/{n}" if n > 1 else ""
-
-
 def cmd_run(args: argparse.Namespace) -> int:
     case = load_case_by_id(args.case_id)
     n = args.repeats
-    print(f"Running: {case.id}  (repeats={n})")
+    max_retries = args.max_retries
+    print(f"Running: {case.id}  (repeats={n}, max-retries={max_retries})")
     print(f"Input:   {case.input}")
     print()
 
@@ -213,9 +212,13 @@ def cmd_run(args: argparse.Namespace) -> int:
     for i in range(n):
         if n > 1:
             print(f"--- repeat {i + 1}/{n} ---")
-        trace = run_case(case, repeat_index=i)
+        trace = run_case_with_retry(case, repeat_index=i, max_retries=max_retries)
         saved = trace.save()
         _print_trace(trace)
+        if trace.retry_count > 0:
+            print(f"Retried: {trace.retry_count} time(s)")
+            for err in trace.retry_errors:
+                print(f"  - {err}")
         print()
         print(f"Trace saved: {saved}")
         traces.append(trace)
@@ -238,30 +241,57 @@ def cmd_run_all(args: argparse.Namespace) -> int:
         return 1
 
     n = args.repeats
-    print(f"Running {len(cases)} case(s) x {n} repeat(s)...\n")
+    workers = args.workers
+    max_retries = args.max_retries
+    total_tasks = len(cases) * n
+    print(
+        f"Running {len(cases)} case(s) x {n} repeat(s)"
+        f"  [{total_tasks} task(s), workers={workers}, max-retries={max_retries}]\n"
+    )
 
-    # rows: list of (case_id, [traces])
-    rows: list[tuple[str, list[EvalTrace]]] = []
-    for case in cases:
-        print(f"[{case.id}]  {case.description[:60]}")
-        traces: list[EvalTrace] = []
-        for i in range(n):
-            trace = run_case(case, repeat_index=i)
-            traces.append(trace)
-            rlabel = f"  repeat {i + 1}/{n}" if n > 1 else " "
-            status = "PASS" if trace.case_passed else "FAIL"
-            first_fail = next(
-                (r["reason"] for r in trace.assertion_results if not r["passed"]), None
-            )
-            note = f"  -- {first_fail[:55]}" if first_fail and not trace.case_passed else ""
-            print(f" {rlabel}: {status}  (${trace.cost_usd:.4f}, {trace.wall_time_ms} ms){note}")
-        rows.append((case.id, traces))
+    print_lock = Lock()
+    results: dict[tuple[str, int], EvalTrace] = {}
 
-        pass_count = sum(1 for t in traces if t.case_passed)
-        overall = "PASS" if pass_count == n else "FAIL"
-        if n > 1:
-            print(f"  => {overall} {pass_count}/{n}")
-        print()
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        future_to_meta = {
+            executor.submit(run_case_with_retry, case, i, max_retries): (case.id, i, case)
+            for case in cases
+            for i in range(n)
+        }
+
+        for future in as_completed(future_to_meta):
+            case_id, rep_idx, case = future_to_meta[future]
+            try:
+                trace = future.result()
+            except Exception as exc:
+                trace = make_error_trace(case, rep_idx, str(exc))
+
+            results[(case_id, rep_idx)] = trace
+
+            with print_lock:
+                rlabel = f"  r{rep_idx + 1}/{n}" if n > 1 else ""
+                status = "PASS" if trace.case_passed else "FAIL"
+                first_fail = next(
+                    (r["reason"] for r in trace.assertion_results if not r["passed"]),
+                    None,
+                )
+                retry_note = (
+                    f"  (retried {trace.retry_count}x)" if trace.retry_count > 0 else ""
+                )
+                fail_note = (
+                    f"  -- {first_fail[:50]}" if first_fail and not trace.case_passed else ""
+                )
+                print(
+                    f"  done  {case_id:<42}{rlabel}"
+                    f"  {status}  ${trace.cost_usd:.4f}  {trace.wall_time_ms}ms"
+                    f"{retry_note}{fail_note}"
+                )
+
+    # Reconstruct rows in original case order
+    rows: list[tuple[str, list[EvalTrace]]] = [
+        (case.id, [results[(case.id, i)] for i in range(n)])
+        for case in cases
+    ]
 
     # ---- Per-case results table --------------------------------------------
     total_cases = len(rows)
@@ -565,11 +595,23 @@ def main() -> None:
         "--repeats", type=int, default=1, metavar="N",
         help="Number of times to run the case (default: 1)",
     )
+    run_p.add_argument(
+        "--max-retries", type=int, default=3, metavar="N",
+        help="Max retries on transient API/network errors (default: 3)",
+    )
 
     run_all_p = sub.add_parser("run-all", help="Run every test case and print a summary")
     run_all_p.add_argument(
         "--repeats", type=int, default=1, metavar="N",
         help="Number of times to run each case (default: 1)",
+    )
+    run_all_p.add_argument(
+        "--workers", type=int, default=4, metavar="N",
+        help="Parallel worker threads (default: 4; use 1 for serial)",
+    )
+    run_all_p.add_argument(
+        "--max-retries", type=int, default=3, metavar="N",
+        help="Max retries per task on transient API/network errors (default: 3)",
     )
 
     rescore_p = sub.add_parser(
