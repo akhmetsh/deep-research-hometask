@@ -14,9 +14,16 @@ env/
 
 # Eval framework — runtime outputs (commit only fixtures/)
 eval_traces/
-traces/
 reports/
 run_summaries/
+
+# If the original agent writes runtime traces at repo root
+/traces/
+
+# Commit fixture traces
+!fixtures/
+!fixtures/traces/
+!fixtures/traces/*.json
 
 # Editor
 .vscode/
