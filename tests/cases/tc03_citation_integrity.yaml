@@ -1,0 +1,39 @@
+id: tc03_citation_integrity
+description: "Citation integrity: every cited URL must have been fetched, not just seen in search results"
+input: "What are the key technical specifications of the Acme R1 robot arm?"
+tags:
+  - citation
+  - retrieval
+  - integrity
+
+# Background: the agent's finish() tool accepts a free-form citations list
+# with NO code validation that the URLs were ever passed to fetch_url.
+# The agent could answer from a BM25 search snippet and cite the URL
+# without actually reading the page — this test catches that pattern.
+#
+# Expected corpus sources: acme-r1-specs.md (or acme-r1-spec-imperial.md).
+# The corpus contains specs in both metric and imperial; the test does not
+# mandate which page is used, only that whatever is cited was fetched.
+
+hard_assertions:
+  # Must reach a confident finish.
+  - type: stopped_reason_is
+    value: finish
+
+  # Agent must have fetched at least one page (cannot answer from snippet alone).
+  - type: tool_called
+    tool: fetch_url
+
+  # The central integrity check: every URL in citations appears in a
+  # fetch_url call in this trace.
+  - type: citation_was_fetched
+
+  # Corpus fact: R1 has a 5 kg payload capacity.
+  - type: answer_contains
+    substring: "5"
+    case_insensitive: false
+
+  - type: answer_not_empty
+
+  - type: answer_word_count_le
+    max_words: 120

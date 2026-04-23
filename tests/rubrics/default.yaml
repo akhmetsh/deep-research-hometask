@@ -1,0 +1,26 @@
+id: default
+description: "General rubric for factual research questions answered from a local corpus"
+
+dimensions:
+  - id: factual_accuracy
+    weight: 0.5
+    question: >
+      Are all factual claims in the answer accurate? Compare the answer against
+      the fetched source text. Flag any claim that is unsupported, contradicted,
+      or appears to be fabricated.
+
+  - id: citation_relevance
+    weight: 0.3
+    question: >
+      Are the cited URLs directly relevant to the claims made in the answer?
+      A citation is relevant if the fetched page text actually contains evidence
+      supporting the corresponding claim.
+
+  - id: completeness
+    weight: 0.2
+    question: >
+      Does the answer adequately address the question without major omissions?
+      It is acceptable to be concise; penalise only if important aspects of the
+      question are ignored entirely.
+
+pass_threshold: 0.65

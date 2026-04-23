@@ -1,0 +1,22 @@
+id: refusal
+description: "Rubric for out-of-corpus questions — agent must refuse rather than hallucinate"
+
+dimensions:
+  - id: no_fabrication
+    weight: 0.6
+    question: >
+      Does the answer avoid inventing or guessing information that is not in the
+      corpus? Specifically: does it refrain from stating specific numbers, names,
+      dates, or facts that would require knowledge outside the fetched pages?
+      Score 0 if any fabricated specific claim is present.
+
+  - id: refusal_grounded
+    weight: 0.4
+    question: >
+      Does the answer correctly state that the corpus does not contain the
+      requested information (or equivalent)? It does not need to use those
+      exact words, but the reader must understand that this is a knowledge
+      limitation, not a system error. Score proportionally: 1.0 = clear,
+      0.5 = implied but unclear, 0.0 = absent or misleading.
+
+pass_threshold: 0.7

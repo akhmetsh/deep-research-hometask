@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Environment
+.env
+.venv/
+venv/
+env/
+
+# Eval framework — runtime outputs (commit only fixtures/)
+eval_traces/
+traces/
+reports/
+
+# macOS
+.DS_Store
+__MACOSX/

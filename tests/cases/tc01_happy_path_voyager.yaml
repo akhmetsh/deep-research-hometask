@@ -1,0 +1,35 @@
+id: tc01_happy_path_voyager
+description: "Happy path: agent correctly answers when Voyager 1 crossed the heliopause"
+input: "When did Voyager 1 cross the heliopause?"
+tags:
+  - happy_path
+  - retrieval
+rubric: factual_accuracy
+
+hard_assertions:
+  # Agent must reach a confident finish, not time out.
+  - type: stopped_reason_is
+    value: finish
+
+  # System prompt rule "Fetch before you answer" must be followed.
+  - type: tool_called
+    tool: fetch_url
+
+  # Correct workflow order: search → fetch → finish.
+  - type: tool_sequence
+    sequence: [web_search, fetch_url, finish]
+    strict: false
+
+  # Every URL in citations must have been fetched during this run.
+  - type: citation_was_fetched
+
+  # August 2012 is when Voyager 1 crossed; corpus confirms this date.
+  - type: answer_contains
+    substring: "2012"
+    case_insensitive: false
+
+  - type: answer_not_empty
+
+  # System prompt rule: answers must stay under 120 words.
+  - type: answer_word_count_le
+    max_words: 120

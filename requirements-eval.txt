@@ -1,0 +1,2 @@
+# Eval framework additional dependencies (install alongside requirements.txt)
+pyyaml>=6.0

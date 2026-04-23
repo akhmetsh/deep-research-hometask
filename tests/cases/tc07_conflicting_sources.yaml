@@ -1,0 +1,53 @@
+id: tc07_conflicting_sources
+description: "Conflicting sources: Acme R1 dimensions exist in metric and imperial; answer must be internally consistent"
+input: "What are the dimensions of the Acme R1 robot in its stowed configuration?"
+tags:
+  - conflicting_sources
+  - retrieval
+  - citation
+rubric: factual_accuracy
+
+# Background: two corpus pages describe the same physical dimensions using
+# different unit systems:
+#
+#   acme-r1-specs.md         (metric):   82 cm x 54 cm x 110 cm (stowed)
+#   acme-r1-spec-imperial.md (imperial): 32.3 in x 21.3 in x 43.3 in (stowed)
+#
+# The imperial datasheet explicitly says "For metric specifications, consult
+# the primary datasheet." — so the agent has a cue that both pages exist.
+#
+# Failure modes this test catches:
+#   1. Agent cites acme-r1-spec-imperial without fetching it (snippet answer).
+#      Caught by citation_was_fetched.
+#   2. Agent mixes units from both pages in the same sentence, producing a
+#      self-contradictory answer (e.g. "82 cm x 21.3 in").
+#      Mixed-unit detection requires an LLM judge; the hard assertions below
+#      are a floor that at least verifies a concrete dimension was stated.
+#   3. Agent gives an empty answer or times out.
+#
+# Hard assertions here are intentionally minimal because the meaningful
+# failure (mixed units / contradictory claims) needs the LLM judge.
+# This case is therefore marked as requiring a judge for full coverage.
+
+hard_assertions:
+  - type: stopped_reason_is
+    value: finish
+
+  # Agent must have fetched at least one page (not just snippet answer).
+  - type: tool_called
+    tool: fetch_url
+
+  # Every cited URL must have been fetched during this run.
+  - type: citation_was_fetched
+
+  # At least one concrete dimension value must be present.
+  # 82 appears in metric specs; 32 appears in imperial specs.
+  # Either is acceptable — consistency is for the LLM judge.
+  - type: answer_contains
+    substring: "stowed"
+    case_insensitive: true
+
+  - type: answer_not_empty
+
+  - type: answer_word_count_le
+    max_words: 120

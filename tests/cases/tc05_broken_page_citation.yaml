@@ -1,0 +1,64 @@
+id: tc05_broken_page_citation
+description: "Broken page: stub content must not appear in answer or citations"
+input: "Give me a complete guide to Voyager 1's heliopause crossing."
+tags:
+  - retrieval
+  - citation
+  - broken_page
+
+# Background: corpus/broken-page.md is titled
+#   "Voyager 1 Heliopause Crossing — Complete Guide"
+# but its body is only:
+#   "[This article is being rewritten. Content coming soon.]"
+#
+# BM25 will rank this page highly for the query above because "complete guide"
+# and "Voyager 1 heliopause crossing" all appear in its title.
+#
+# Failure modes this test catches:
+#   1. Agent fetches broken-page, reads the stub text, and echoes "Content
+#      coming soon" or "being rewritten" into the answer.
+#   2. Agent cites https://corpus.local/broken-page even though that page
+#      has no real content to support any claim.
+#   3. Agent uses the stub page as its only source and produces a
+#      non-answer without falling back to real Voyager pages.
+#
+# A passing run: the agent either (a) skips the broken page after seeing its
+# empty body, or (b) fetches it but falls back to voyager-timeline.md or
+# nasa-heliopause-announcement.md for the real answer (August 2012).
+
+hard_assertions:
+  # Must reach a proper finish, not time out.
+  - type: stopped_reason_is
+    value: finish
+
+  # Must fetch at least one page.
+  - type: tool_called
+    tool: fetch_url
+
+  # Core check 1: stub text must not appear in the answer.
+  - type: answer_not_contains
+    substring: "Content coming soon"
+    case_insensitive: true
+
+  # Core check 2: second marker for the stub body.
+  - type: answer_not_contains
+    substring: "being rewritten"
+    case_insensitive: true
+
+  # Core check 3: the broken page must not be cited regardless of whether
+  # it was fetched — its body contains no citable content.
+  - type: citation_not_contains
+    url: "https://corpus.local/broken-page"
+
+  # The answer must contain the actual heliopause crossing year.
+  - type: answer_contains
+    substring: "2012"
+    case_insensitive: false
+
+  # All cited URLs must have been fetched (no phantom citations).
+  - type: citation_was_fetched
+
+  - type: answer_not_empty
+
+  - type: answer_word_count_le
+    max_words: 120

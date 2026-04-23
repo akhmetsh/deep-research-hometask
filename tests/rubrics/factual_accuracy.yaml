@@ -1,0 +1,27 @@
+id: factual_accuracy
+description: "Strict factual rubric — used for cases where corpus pages are the ground truth"
+
+dimensions:
+  - id: claims_grounded
+    weight: 0.5
+    question: >
+      Every factual claim in the answer must be traceable to a sentence in
+      one of the fetched pages. Are all claims grounded in the source text?
+      Score 0 if any claim cannot be found in or is contradicted by the sources.
+
+  - id: no_hallucination
+    weight: 0.3
+    question: >
+      Does the answer introduce any information that does NOT appear in the
+      fetched pages? This includes invented dates, names, numbers, or
+      qualifications. Score 0 if any hallucinated detail is present.
+
+  - id: units_consistent
+    weight: 0.2
+    question: >
+      If the answer contains numerical values (dimensions, speeds, distances,
+      counts), are they internally consistent? E.g. the answer must not mix
+      metric and imperial units without explicit labelling. Score 0 if units
+      are mixed in a way that could mislead the reader.
+
+pass_threshold: 0.7
